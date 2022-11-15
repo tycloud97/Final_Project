@@ -1,0 +1,63 @@
+- name: Install the K3s agent
+  environment:
+    ENDPOINT: "{{ groups['endpoint'].0 | default(new_endpoint_ip) }}"
+    TOKEN: "{{ k3s_token }}"
+  shell: |
+    systemctl status k3s-agent
+    if [[ $? == 4 ]]; then
+      sudo curl -sfL https://get.k3s.io | \
+      K3S_URL=https://$ENDPOINT:6443 \
+      K3S_TOKEN=$TOKEN \
+      sh -
+      if [[ $? == 1 ]]; then
+        /usr/local/bin/k3s-agent-uninstall.sh
+      fi
+    elif [[ $? == 3 ]]; then
+      /usr/local/bin/k3s-agent-uninstall.sh
+    fi
+  args:
+    executable: /bin/bash
+  tags:
+    - worker
+
+- name: Remove host from new_worker group
+  delegate_to: localhost
+  lineinfile:
+    path: "../inventories/inventory.ini"
+    line: "{{ worker_ip }}"
+    state: absent
+  tags:
+    - worker
+
+- name: Add host to the worker group
+  delegate_to: localhost
+  lineinfile:
+    path: "../inventories/inventory.ini"
+    insertafter: "[^_]worker"
+    line: "{{ worker_ip }}"
+  tags:
+    - worker
+
+- name: Add server to endpoint's configuration for http
+  delegate_to: "{{ groups['endpoint'].0 | default(new_endpoint_ip) }}"
+  lineinfile:
+    path: /etc/haproxy/haproxy.cfg
+    insertbefore: "frontend kubernetes-workers-http$"
+    line: "  server {{ worker_hostname }} {{ worker_ip }}:80"
+  tags:
+    - worker
+
+- name: Add server to endpoint's configuration for https
+  delegate_to: "{{ groups['endpoint'].0 | default(new_endpoint_ip) }}"
+  lineinfile:
+    path: /etc/haproxy/haproxy.cfg
+    insertbefore: "frontend kubernetes-workers-https$"
+    line: "  server {{ worker_hostname }} {{ worker_ip }}:443"
+  tags:
+    - worker
+
+- name: Reload HAProxy configuration
+  delegate_to: "{{ groups['endpoint'].0 | default(new_endpoint_ip) }}"
+  shell: docker kill -s HUP haproxy
+  tags: 
+    - worker

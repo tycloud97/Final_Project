@@ -1,0 +1,116 @@
+- name: Clear HAProxy configuration for all control planes.
+  delegate_to: "{{ groups['endpoint'].0 | default(new_endpoint_ip) }}"
+  lineinfile:
+    path: /etc/haproxy/haproxy.cfg
+    search_string: "{{ item }}"
+    state: absent
+  loop: "{{ groups['control_plane'] }}"
+  when: cluster_init == 1 and groups['control_plane'].0 is defined
+  tags:
+    - control_plane
+
+- name: Clear HAProxy configuration for all workers.
+  delegate_to: "{{ groups['endpoint'].0 | default(new_endpoint_ip) }}"
+  lineinfile:
+    path: /etc/haproxy/haproxy.cfg
+    search_string: "{{ item }}"
+    state: absent
+  loop: "{{ groups['worker'] }}"
+  when: cluster_init == 1 and groups['worker'].0 is defined
+  tags:
+    - control_plane
+
+- name: Reload HAProxy configuration
+  delegate_to: "{{ groups['endpoint'].0 | default(new_endpoint_ip) }}"
+  shell: docker kill -s HUP haproxy
+  tags: 
+    - control_plane
+
+- name: Run the installation script to initialize the cluster
+  environment:
+    ENDPOINT: "{{ groups['endpoint'].0 | default(new_endpoint_ip) }}"
+    IP: "{{ inventory_hostname }}"
+    TOKEN: "{{ k3s_token }}"
+  shell: |
+    curl -sfL https://get.k3s.io | \
+    K3S_TOKEN=$TOKEN \
+    sh -s - server \
+    --node-taint CriticalAddonsOnly=true:NoExecute \
+    --kubelet-arg "node-status-update-frequency=4s" \
+    --kube-controller-manager-arg "node-monitor-period=4s" \
+    --kube-controller-manager-arg "node-monitor-grace-period=16s" \
+    --kube-controller-manager-arg "pod-eviction-timeout=10s" \
+    --kube-controller-manager-arg "horizontal-pod-autoscaler-sync-period=10s" \
+    --kube-apiserver-arg "default-not-ready-toleration-seconds=10" \
+    --kube-apiserver-arg "default-unreachable-toleration-seconds=10" \
+    --tls-san $IP --tls-san $ENDPOINT \
+    --cluster-init
+    sleep 30
+  args:
+    executable: /bin/bash
+  run_once: true
+  when: cluster_init == 1
+  tags:
+    - control_plane
+
+- name: Run the installation script to add a server to the cluster
+  environment:
+    ENDPOINT: "{{ groups['endpoint'].0 | default(new_endpoint_ip) }}"
+    IP: "{{ inventory_hostname }}"
+    TOKEN: "{{ k3s_token }}"
+  shell: |
+    systemctl status k3s
+    if [[ $? == 4 ]]; then
+      curl -sfL https://get.k3s.io | \
+      K3S_TOKEN=$TOKEN \
+      sh -s - server \
+      --node-taint CriticalAddonsOnly=true:NoExecute \
+      --kubelet-arg "node-status-update-frequency=4s" \
+      --kube-controller-manager-arg "node-monitor-period=4s" \
+      --kube-controller-manager-arg "node-monitor-grace-period=16s" \
+      --kube-controller-manager-arg "horizontal-pod-autoscaler-sync-period=10s" \
+      --kube-controller-manager-arg "pod-eviction-timeout=10s" \
+      --kube-apiserver-arg "default-not-ready-toleration-seconds=10" \
+      --kube-apiserver-arg "default-unreachable-toleration-seconds=10" \
+      --tls-san $IP --tls-san $ENDPOINT \
+      --server https://$ENDPOINT:6443
+    fi
+    sleep 2
+  args:
+    executable: /bin/bash
+  when: cluster_init == 0
+  tags:
+    - control_plane
+
+- name: Remove host from new_control_plane group
+  delegate_to: localhost
+  lineinfile:
+    path: ../inventories/inventory.ini
+    line: "{{ cp_ip }}"
+    state: absent
+  tags:
+    - control_plane
+
+- name: Add host to the control_plane group
+  delegate_to: localhost
+  lineinfile:
+    path: ../inventories/inventory.ini
+    insertafter: "[^_]control_plane"
+    line: "{{ cp_ip }}"
+  tags:
+    - control_plane
+
+- name: Add server to endpoint's configuration
+  delegate_to: "{{ groups['endpoint'].0 | default(new_endpoint_ip) }}"
+  lineinfile:
+    path: /etc/haproxy/haproxy.cfg
+    insertbefore: "frontend kubernetes-control-planes$"
+    line: "  server {{ cp_hostname }} {{ cp_ip }}:6443"
+  tags:
+    - control_plane
+
+- name: Reload HAProxy configuration
+  delegate_to: "{{ groups['endpoint'].0 | default(new_endpoint_ip) }}"
+  shell: docker kill -s HUP haproxy
+  tags: 
+    - control_plane

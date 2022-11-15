@@ -1,0 +1,48 @@
+- name: Refresh export file
+  hosts: storage
+  remote_user: root
+  gather_facts: false
+  tasks:
+    - name: Clear exports file
+      ansible.builtin.shell: |+
+        truncate -s 0 /etc/exports
+    - name: Add permissions for the new endpoint
+      ansible.builtin.lineinfile:
+        path: "/etc/exports"
+        insertafter: EOF
+        line: "/opt/nfs/endpoint {{ item }}(rw,sync,no_subtree_check,anonuid=0,anongid=0)"
+      loop: "{{ groups['new_endpoint'] }}"
+    - name: Add permissions for the already existing endpoint
+      ansible.builtin.lineinfile:
+        path: "/etc/exports"
+        insertafter: EOF
+        line: "/opt/nfs/endpoint {{ item }}(rw,sync,no_subtree_check,anonuid=0,anongid=0)"
+      loop: "{{ groups['endpoint'] }}"
+    - name: Add permissions for the new control planes
+      ansible.builtin.lineinfile:
+        path: "/etc/exports"
+        insertafter: EOF
+        line: "/opt/nfs/k8s {{ item }}(rw,sync,no_subtree_check,anonuid=0,anongid=0)"
+      loop: "{{ groups['new_control_plane'] }}"
+    - name: Add permissions for the already existing control planes
+      ansible.builtin.lineinfile:
+        path: "/etc/exports"
+        insertafter: EOF
+        line: "/opt/nfs/k8s {{ item }}(rw,sync,no_subtree_check,anonuid=0,anongid=0)"
+      loop: "{{ groups['control_plane'] }}"
+    - name: Add permissions for the new workers
+      ansible.builtin.lineinfile:
+        path: "/etc/exports"
+        insertafter: EOF
+        line: "/opt/nfs/k8s {{ item }}(rw,sync,no_subtree_check,anonuid=0,anongid=0)"
+      loop: "{{ groups['new_worker'] }}"
+    - name: Add permissions for the new workers
+      ansible.builtin.lineinfile:
+        path: "/etc/exports"
+        insertafter: EOF
+        line: "/opt/nfs/k8s {{ item }}(rw,sync,no_subtree_check,anonuid=0,anongid=0)"
+      loop: "{{ groups['worker'] }}"
+    - name: Refresh export
+      shell: exportfs -a
+  tags:
+    - storage

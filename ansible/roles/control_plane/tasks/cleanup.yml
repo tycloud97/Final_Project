@@ -1,0 +1,46 @@
+- name: Check if there are faulty K3s installations
+  shell: |
+    systemctl status k3s > /dev/null
+    if [[ $? = 0 ]]; then
+      echo no
+    else
+      echo yes
+    fi
+  args:
+    executable: /bin/bash
+  register: k3s_check_tmp
+  tags:
+    - control_plane
+    - cleanup
+
+- name: Set k3s_check variable
+  set_fact:
+    k3s_check: "{{ k3s_check_tmp['stdout'] }}"
+  tags:
+    - control_plane
+    - cleanup
+
+- name: Delete faulty K3s control plane
+  environment:
+    NAME: "{{ cp_hostname }}"
+  shell: bash ../roles/control_plane/files/delete-node.sh $NAME
+  delegate_to: localhost
+  become: false
+  ignore_errors: true
+  when: k3s_check is true or cluster_init == 1 or hostvars[groups['control_plane'].0 | default(groups['new_control_plane'].0)]['cluster_cleanup'] is defined
+  tags:
+    - control_plane
+    - cleanup
+
+- name: Uninstall previous K3s installation
+  shell: |
+    if [[ -f /usr/local/bin/k3s-uninstall.sh ]]; then
+      /usr/local/bin/k3s-uninstall.sh
+    fi
+    sleep 5
+  args:
+    executable: /bin/bash
+  when: k3s_check is true or cluster_init == 1 or hostvars[groups['control_plane'].0 | default(groups['new_control_plane'].0)]['cluster_cleanup'] is defined
+  tags:
+    - control_plane
+    - cleanup

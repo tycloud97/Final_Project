@@ -1,0 +1,61 @@
+# This role should be executed in serial, as to avoid conflicts and other issues with the installation process.
+
+- name: Include variable file
+  include_vars: 
+    dir: ../../../global-vars
+  tags:
+    - control_plane
+    - include-vars
+
+- name: Set necessary variables
+  set_fact:
+    cp_hostname: "{{ ansible_hostname }}"
+    cp_ip: "{{ inventory_hostname }}"
+  tags:
+    - control_plane
+    - include-vars
+
+- name: Set endpoint variable
+  set_fact:
+    new_endpoint_ip: "{{ groups['new_endpoint'].0 | default(omit) }}"
+  when: groups['new_endpoint'].0 is defined
+  tags:
+    - control_plane
+    - include-vars
+
+- name: Include cleanup related tasks
+  include_tasks: cleanup.yml
+  tags:
+    - control_plane
+    - cleanup
+
+- name: Include K3s installation related tasks
+  include_tasks: install.yml
+  tags:
+    - control_plane
+
+- name: Include kube config related tasks
+  include_tasks: kubeconfig.yml
+  tags:
+    - control_plane
+    - kubeconfig
+
+- name: Change cluster_init variable and set cleanup variable
+  set_fact:
+    cluster_init: 0
+    cluster_cleanup: true
+  run_once: true
+  when: cluster_init == 1
+  tags:
+    - control_plane
+
+- name: Change cluster_init variable value so that other servers can join the cluster
+  lineinfile:
+    path: ../global-vars/main.yml
+    regex: cluster_init*
+    line: "cluster_init: 0"
+  delegate_to: localhost
+  become: false
+  run_once: true
+  tags:
+    - control_plane

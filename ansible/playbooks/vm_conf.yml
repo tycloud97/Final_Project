@@ -1,0 +1,46 @@
+- name: Manage general configurations
+  hosts: all, !pve
+  remote_user: root
+  gather_facts: true
+  roles:
+    - ../roles/basic_conf
+  tags:
+    - basic_conf
+
+- name: Configure storage server
+  hosts: new_storage
+  remote_user: root
+  gather_facts: false
+  roles:
+    - ../roles/storage
+  tags:
+    - storage
+
+- name: Configure endpoint server
+  hosts: new_endpoint
+  remote_user: root
+  gather_facts: true
+  roles:
+    - ../roles/endpoint
+  tags:
+    - endpoint
+
+- name: Configure control planes
+  hosts: new_control_plane, control_plane
+  remote_user: root
+  serial: 1
+  gather_facts: true
+  roles:
+    - "../roles/control_plane"
+  tags:
+    - control_plane
+
+- name: Configure workers
+  hosts: new_worker, worker
+  remote_user: root
+  serial: 1
+  gather_facts: true
+  roles:
+    - "../roles/worker"
+  tags:
+    - worker

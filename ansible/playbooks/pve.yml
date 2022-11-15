@@ -1,0 +1,19 @@
+- name: Install PVE
+  hosts: pve
+  remote_user: root
+  gather_facts: false
+  roles:
+    - ../roles/pve_install
+  tags:
+    - pve
+    - pve_install
+
+- name: Configure PVE
+  hosts: pve
+  remote_user: root
+  gather_facts: false
+  roles:
+    - ../roles/pve_config
+  tags:
+    - pve
+    - pve_config

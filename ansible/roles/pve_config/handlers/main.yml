@@ -1,0 +1,7 @@
+- name: Restart OpenSSH server
+  service:
+    name: sshd
+    state: restarted
+  tags:
+    - pve
+    - user

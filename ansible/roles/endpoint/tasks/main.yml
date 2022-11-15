@@ -1,0 +1,42 @@
+- name: Include variable file
+  include_vars: 
+    dir: ../../../global-vars
+  tags:
+    - endpoint
+    - include-vars
+
+- name: Include Docker related tasks
+  include_tasks: docker.yml
+  tags:
+    - endpoint
+    - docker
+
+- name: Include HAProxy related tasks
+  include_tasks: haproxy.yml
+  tags:
+    - endpoint
+    - haproxy
+
+- name: Include wireguard related tasks
+  include_tasks: wireguard.yml
+  tags:
+    - endpoint
+    - wireguard
+
+- name: Remove host from new_endpoint group
+  delegate_to: localhost
+  lineinfile:
+    path: "../inventories/inventory.ini"
+    line: "{{ inventory_hostname }}"
+    state: absent
+  tags:
+    - endpoint
+
+- name: Add host to the endpoint group
+  delegate_to: localhost
+  lineinfile:
+    path: "../inventories/inventory.ini"
+    insertafter: "[^_]endpoint"
+    line: "{{ inventory_hostname }}"
+  tags:
+    - endpoint

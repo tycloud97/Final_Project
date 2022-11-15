@@ -1,0 +1,23 @@
+# PVE
+gateway: 192.168.100.1
+
+pve_hostname: pve-01
+
+pve_net_interface: enp1
+
+pve_domain: local.domain
+
+pve_cluster_name: local
+
+pve_user: user@pam
+
+pve_groups:
+  - name: admin
+    comment: System Administrators
+    role: Administrator
+
+# K8s cluster
+cluster_init: 1
+
+# Wireguard
+wireguard_peers: PC, Phone

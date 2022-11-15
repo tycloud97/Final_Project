@@ -1,0 +1,35 @@
+# This role should be executed in serial, as to avoid conflicts and other issues with the installation process.
+
+- name: Include variable file
+  include_vars: 
+    dir: ../../../global-vars
+  tags:
+    - worker
+    - include-vars
+
+- name: Set necessary variables
+  set_fact:
+    worker_hostname: "{{ ansible_hostname }}"
+    worker_ip: "{{ inventory_hostname }}"
+  tags:
+    - worker
+    - include-vars
+
+- name: Set endpoint variable
+  set_fact:
+    new_endpoint_ip: "{{ groups['new_endpoint'].0 | default(omit) }}"
+  when: groups['new_endpoint'].0 is defined
+  tags:
+    - worker
+    - include-vars
+
+- name: Include cleanup related tasks
+  include_tasks: cleanup.yml
+  tags:
+    - worker
+    - cleanup
+
+- name: Include K3s agent installation related tasks
+  include_tasks: install.yml
+  tags:
+    - worker

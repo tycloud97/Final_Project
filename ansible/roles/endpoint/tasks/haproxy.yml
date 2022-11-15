@@ -1,0 +1,107 @@
+- name: Create HAProxy config directory
+  file:
+    path: /etc/haproxy
+    state: directory
+  tags:
+    - endpoint
+    - haproxy
+
+- name: Create HAProxy config file
+  shell: |
+    cat << EOF | tee /etc/haproxy/haproxy.cfg > /dev/null
+    defaults
+      log global
+      mode tcp
+      option tcplog
+      timeout client 300s
+      timeout server 300s
+      timeout connect 3s
+      timeout http-request 3s
+    global
+      log stdout format raw daemon debug
+    
+    backend kubernetes-control-planes
+      balance roundrobin
+      default-server check maxconn 20 check-ssl verify none
+    frontend kubernetes-control-planes
+      bind :6443
+      default_backend kubernetes-control-planes
+    
+    backend kubernetes-workers-http
+      balance roundrobin
+      default-server check
+    frontend kubernetes-workers-http
+      bind :80
+      default_backend kubernetes-workers-http
+    
+    backend kubernetes-workers-https
+      balance roundrobin
+      default-server check check-ssl verify none
+    frontend kubernetes-workers-https
+      bind :443
+      default_backend kubernetes-workers-https
+    EOF
+  args:
+    executable: /bin/bash
+  tags:
+    - endpoint
+    - haproxy
+
+- name: Create HAProxy Docker container
+  shell: |+
+      if [[ ! $(docker ps | grep haproxy) ]]; then
+      docker run -d \
+        --name haproxy \
+        --sysctl net.ipv4.ip_unprivileged_port_start=0 \
+        -v /etc/haproxy/:/usr/local/etc/haproxy:ro \
+        -p 80:80 \
+        -p 443:443 \
+        -p 6443:6443 \
+        -h haproxy-0 \
+        --restart always \
+        haproxy:2.6
+      fi
+  args:
+    executable: /bin/bash
+  tags:
+    - endpoint
+    - haproxy
+
+- name: Add existing control planes to config
+  lineinfile:
+    path: /etc/haproxy/haproxy.cfg
+    insertbefore: "frontend kubernetes-control-planes$"
+    line: "  server {{ hostvars[item]['ansible_hostname'] }} {{ item }}:6443"
+    state: present
+  loop: "{{ groups['control_plane'] }}"
+  tags:
+    - endpoint
+    - haproxy
+
+- name: Add existing workers to http config
+  lineinfile:
+    path: /etc/haproxy/haproxy.cfg
+    insertbefore: "frontend kubernetes-workers-http$"
+    line: "  server {{ hostvars[item]['ansible_hostname'] }} {{ item }}:80"
+    state: present
+  loop: "{{ groups['worker'] }}"
+  tags:
+    - endpoint
+    - haproxy
+
+- name: Add existing workers to https config
+  lineinfile:
+    path: /etc/haproxy/haproxy.cfg
+    insertbefore: "frontend kubernetes-workers-https$"
+    line: "  server {{ hostvars[item]['ansible_hostname'] }} {{ item }}:443"
+    state: present
+  loop: "{{ groups['worker'] }}"
+  tags:
+    - endpoint
+    - haproxy
+
+- name: Reload HAProxy config
+  shell: docker kill -s HUP haproxy
+  tags:
+    - endpoint
+    - haproxy

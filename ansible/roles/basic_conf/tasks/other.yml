@@ -1,0 +1,57 @@
+- name: Remove Debian DVD from repo list
+  lineinfile:
+    path: /etc/apt/sources.list
+    regexp: '^deb cdrom'
+    state: absent
+  tags:
+    - basic_conf
+    - other
+
+- name: Ensure dpkg is ready
+  shell: |
+    dpkg --configure -a
+  tags:
+    - basic_conf
+    - other
+
+- name: Install useful packages
+  apt:
+    name:
+      - sudo
+      - htop
+      - vim
+      - tree
+      - qemu-guest-agent
+      - nfs-common
+    state: latest
+  tags:
+    - basic_conf
+    - other
+
+- name: Enable and start qemu-guest-agent service
+  service:
+    name: qemu-guest-agent
+    enabled: true
+    state: started
+  notify: 
+    - Reboot system
+  tags:
+    - basic_conf
+    - other
+
+- name: Edit /etc/hosts file
+  lineinfile:
+    path: /etc/hosts
+    regexp: "127.0.1.1"
+    line: "127.0.1.1       {{ ansible_hostname }}.grghomelab.me   {{ ansible_hostname }}"
+  tags:
+    - basic_conf
+    - other
+
+- name: Edit global bash settings
+  template:
+    src: bash.bashrc.j2
+    dest: /etc/bash.bashrc
+  tags:
+    - basic_conf
+    - other

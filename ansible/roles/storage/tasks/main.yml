@@ -1,0 +1,113 @@
+- name: Include variable file
+  include_vars: 
+    dir: ../../../global-vars
+  tags:
+    - storage
+    - include-vars
+
+- name: Install dependencies
+  apt:
+    update_cache: true
+    name:
+      - nfs-kernel-server
+  tags:
+    - storage
+
+- name: Create nfs root share directory
+  file:
+    path: /opt/nfs
+    state: directory
+    mode: 701
+  tags:
+    - storage
+
+- name: Create share directories
+  shell: |
+    mkdir -p /opt/nfs/k8s
+    mkdir -p /opt/nfs/endpoint/wireguard-config
+  tags:
+    - storage
+  
+- name: Clear previous /etc/exports file
+  shell: |
+    truncate -s 0 /etc/exports
+  tags:
+    - storage
+
+- name: Add permissions for the new endpoint
+  ansible.builtin.lineinfile:
+    path: "/etc/exports"
+    insertafter: EOF
+    line: "/opt/nfs/endpoint {{ item }}(rw,sync,no_subtree_check,anonuid=0,anongid=0)"
+  loop: "{{ groups['new_endpoint'] }}"
+  tags:
+    - storage
+
+- name: Add permissions for the already existing endpoint
+  ansible.builtin.lineinfile:
+    path: "/etc/exports"
+    insertafter: EOF
+    line: "/opt/nfs/endpoint {{ item }}(rw,sync,no_subtree_check,anonuid=0,anongid=0)"
+  loop: "{{ groups['endpoint'] }}"
+  tags:
+    - storage
+
+- name: Add permissions for the new control planes
+  ansible.builtin.lineinfile:
+    path: "/etc/exports"
+    insertafter: EOF
+    line: "/opt/nfs/k8s {{ item }}(rw,sync,no_subtree_check,anonuid=0,anongid=0)"
+  loop: "{{ groups['new_control_plane'] }}"
+  tags:
+    - storage
+
+- name: Add permissions for the already existing control planes
+  ansible.builtin.lineinfile:
+    path: "/etc/exports"
+    insertafter: EOF
+    line: "/opt/nfs/k8s {{ item }}(rw,sync,no_subtree_check,anonuid=0,anongid=0)"
+  loop: "{{ groups['control_plane'] }}"
+  tags:
+    - storage
+
+- name: Add permissions for the new workers
+  ansible.builtin.lineinfile:
+    path: "/etc/exports"
+    insertafter: EOF
+    line: "/opt/nfs/k8s {{ item }}(rw,sync,no_subtree_check,anonuid=0,anongid=0)"
+  loop: "{{ groups['new_worker'] }}"
+  tags:
+    - storage
+
+- name: Add permissions for the new workers
+  ansible.builtin.lineinfile:
+    path: "/etc/exports"
+    insertafter: EOF
+    line: "/opt/nfs/k8s {{ item }}(rw,sync,no_subtree_check,anonuid=0,anongid=0)"
+  loop: "{{ groups['worker'] }}"
+  tags:
+    - storage
+
+- name: Update exports
+  shell: |
+    exportfs -a
+  tags:
+    - storage
+
+- name: Remove host from new_storage group
+  delegate_to: localhost
+  lineinfile:
+    path: "../inventories/inventory.ini"
+    line: "{{ inventory_hostname }}"
+    state: absent
+  tags:
+    - storage
+
+- name: Add host to the storage group
+  delegate_to: localhost
+  lineinfile:
+    path: "../inventories/inventory.ini"
+    insertafter: "[^_]storage"
+    line: "{{ inventory_hostname }}"
+  tags:
+    - storage

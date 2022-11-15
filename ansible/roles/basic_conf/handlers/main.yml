@@ -1,0 +1,13 @@
+- name: Reboot system
+  reboot:
+  tags:
+    - basic_conf
+    - other
+
+- name: Restart OpenSSH server
+  service:
+    name: sshd
+    state: restarted
+  tags:
+    - basic_conf
+    - user

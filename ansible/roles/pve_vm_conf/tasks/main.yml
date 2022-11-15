@@ -1,0 +1,29 @@
+- name: Move .fw file to temporary location
+  template:
+    src: "{{ vm_type }}.j2"
+    dest: "/root/{{ vmid }}.fw"
+  tags:
+    - pve_vm_conf
+
+- name: Add firewall rules to VM
+  environment:
+    VMID: "{{ vmid }}"
+  shell:
+    mv /root/${VMID}.fw /etc/pve/firewall/
+  tags:
+    - pve_vm_conf
+
+- name: Enable QEMU guest agent
+  environment:
+    VMID: "{{ vmid }}"
+  shell: |
+    qm set $VMID --agent 1
+    while ! qm reboot $VMID
+    do
+      sleep 2
+    done
+    sleep 5
+  args:
+    executable: /bin/bash
+  tags:
+    - pve_vm_conf
